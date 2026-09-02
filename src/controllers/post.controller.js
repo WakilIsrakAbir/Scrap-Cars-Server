@@ -1,6 +1,8 @@
 const CarPost = require("../models/CarPost");
+const User = require("../models/User");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
+const whatsappService = require("../services/whatsapp.service");
 
 const uploadToCloudinary = (fileBuffer) => {
   return new Promise((resolve, reject) => {
@@ -37,7 +39,22 @@ const createPost = async (req, res) => {
       images: imageUrls,
     });
 
-    res.status(201).json({ message: "Post created successfully", post });
+    // Notify Admin via WhatsApp
+    const user = await User.findById(req.user._id);
+    whatsappService.notifyAdminNewCarPost(post, user).catch((err) => {
+      console.error("WhatsApp admin notification error:", err);
+    });
+
+    const whatsappChatUrl = whatsappService.generateWhatsAppLink(
+      process.env.ADMIN_WHATSAPP_NUMBER || "971501234567",
+      `Hi ScrapCars Dubai! I just submitted my ${year} ${brand} ${model} (Post ID: ${post._id}) for valuation.`
+    );
+
+    res.status(201).json({ 
+      message: "Post created successfully", 
+      post,
+      whatsappChatUrl
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -73,6 +90,12 @@ const acceptOffer = async (req, res) => {
 
     post.status = "ACCEPTED";
     await post.save();
+
+    const user = await User.findById(req.user._id);
+    whatsappService.notifyStatusChange(user, post, "ACCEPTED").catch((err) => {
+      console.error("WhatsApp user accept notification error:", err);
+    });
+
     res.json({ message: "Offer accepted successfully", post });
   } catch (error) {
     res.status(500).json({ message: error.message });
