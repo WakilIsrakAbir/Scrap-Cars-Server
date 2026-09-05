@@ -22,10 +22,15 @@ const createPost = async (req, res) => {
     const { brand, model, year, condition, description, locationAddress } = req.body;
     let imageUrls = [];
 
-    // Upload images to Cloudinary
+    // Upload images to Cloudinary (skip gracefully if Cloudinary is not configured)
     if (req.files && req.files.length > 0) {
-      const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer));
-      imageUrls = await Promise.all(uploadPromises);
+      try {
+        const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer));
+        imageUrls = await Promise.all(uploadPromises);
+      } catch (uploadErr) {
+        console.warn("Cloudinary upload failed (skipping images):", uploadErr.message);
+        // Continue without images if Cloudinary is not configured
+      }
     }
 
     const post = await CarPost.create({
@@ -39,11 +44,15 @@ const createPost = async (req, res) => {
       images: imageUrls,
     });
 
-    // Notify Admin via WhatsApp
-    const user = await User.findById(req.user._id);
-    whatsappService.notifyAdminNewCarPost(post, user).catch((err) => {
-      console.error("WhatsApp admin notification error:", err);
-    });
+    // Notify Admin via WhatsApp (non-blocking)
+    try {
+      const user = await User.findById(req.user._id);
+      whatsappService.notifyAdminNewCarPost(post, user).catch((err) => {
+        console.warn("WhatsApp admin notification error:", err.message);
+      });
+    } catch (e) {
+      // Ignore WhatsApp errors
+    }
 
     const whatsappChatUrl = whatsappService.generateWhatsAppLink(
       process.env.ADMIN_WHATSAPP_NUMBER || "971501234567",
@@ -56,6 +65,7 @@ const createPost = async (req, res) => {
       whatsappChatUrl
     });
   } catch (error) {
+    console.error("Create post error:", error);
     res.status(500).json({ message: error.message });
   }
 };
