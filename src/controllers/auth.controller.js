@@ -37,14 +37,26 @@ const login = async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
 
-    if (user && (await bcrypt.compare(password, user.password))) {
-      res.json({
-        token: generateToken(user._id),
-        user: { _id: user._id, name: user.name, email: user.email, role: user.role },
-      });
-    } else {
-      res.status(401).json({ message: "Invalid email or password" });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: "Invalid email or password" });
     }
+
+    if (user.isRestricted) {
+      return res.status(403).json({ 
+        message: "Your account has been restricted by administrator. Please contact support." 
+      });
+    }
+
+    res.json({
+      token: generateToken(user._id),
+      user: { 
+        _id: user._id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        isRestricted: user.isRestricted 
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

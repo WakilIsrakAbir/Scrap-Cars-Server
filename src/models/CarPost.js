@@ -11,7 +11,7 @@ const carPostSchema = new mongoose.Schema({
   images: [{ type: String }], // Array of image URLs
   status: { 
     type: String, 
-    enum: ["PENDING", "UNDER_REVIEW", "OFFER_SENT", "ACCEPTED", "PICKUP_SCHEDULED", "COMPLETED", "CANCELLED"],
+    enum: ["PENDING", "UNDER_REVIEW", "CONTACTED", "ACCEPTED", "PICKUP_SCHEDULED", "COMPLETED", "REJECTED", "CANCELLED", "OFFER_SENT"],
     default: "PENDING"
   },
   offerPrice: { type: Number }

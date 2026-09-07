@@ -112,4 +112,30 @@ const acceptOffer = async (req, res) => {
   }
 };
 
-module.exports = { createPost, getMyPosts, getPostById, acceptOffer };
+const updateMyPost = async (req, res) => {
+  try {
+    const { brand, model, year, condition, description, locationAddress } = req.body;
+    const post = await CarPost.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      { brand, model, year, condition, description, locationAddress },
+      { new: true }
+    );
+    if (!post) return res.status(404).json({ message: "Post not found or unauthorized" });
+    res.json({ message: "Post updated successfully", post });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteMyPost = async (req, res) => {
+  try {
+    const post = await CarPost.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!post) return res.status(404).json({ message: "Post not found or unauthorized" });
+    res.json({ message: "Post deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { createPost, getMyPosts, getPostById, acceptOffer, updateMyPost, deleteMyPost };
+
