@@ -7,7 +7,7 @@ const whatsappService = require("../services/whatsapp.service");
 const uploadToCloudinary = (fileBuffer) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: "scrapcars" },
+      { folder: process.env.CLOUDINARY_FOLDER || "scrapcars_posts" },
       (error, result) => {
         if (result) resolve(result.secure_url);
         else reject(error);
@@ -16,6 +16,7 @@ const uploadToCloudinary = (fileBuffer) => {
     streamifier.createReadStream(fileBuffer).pipe(uploadStream);
   });
 };
+
 
 const createPost = async (req, res) => {
   try {
@@ -114,18 +115,59 @@ const acceptOffer = async (req, res) => {
 
 const updateMyPost = async (req, res) => {
   try {
-    const { brand, model, year, condition, description, locationAddress } = req.body;
-    const post = await CarPost.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
-      { brand, model, year, condition, description, locationAddress },
-      { new: true }
-    );
+    const { brand, model, year, condition, description, locationAddress, existingImages } = req.body;
+
+    let post = await CarPost.findOne({ _id: req.params.id, userId: req.user._id });
     if (!post) return res.status(404).json({ message: "Post not found or unauthorized" });
+
+    let finalImages = [];
+    if (existingImages !== undefined) {
+      if (Array.isArray(existingImages)) {
+        finalImages = [...existingImages];
+      } else {
+        try {
+          const parsed = JSON.parse(existingImages);
+          if (Array.isArray(parsed)) finalImages = parsed;
+          else finalImages = [existingImages];
+        } catch {
+          finalImages = existingImages ? [existingImages] : [];
+        }
+      }
+    } else if (!req.files || req.files.length === 0) {
+      // If neither existingImages nor new files are passed, keep current images
+      finalImages = post.images || [];
+    }
+
+    // Upload new files to Cloudinary
+    if (req.files && req.files.length > 0) {
+      try {
+        const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer));
+        const newUrls = await Promise.all(uploadPromises);
+        finalImages = [...finalImages, ...newUrls];
+      } catch (uploadErr) {
+        console.warn("Cloudinary upload failed on update:", uploadErr.message);
+      }
+    }
+
+    // Limit to max 5 images
+    if (existingImages !== undefined || (req.files && req.files.length > 0)) {
+      post.images = finalImages.slice(0, 5);
+    }
+
+    if (brand) post.brand = brand;
+    if (model) post.model = model;
+    if (year) post.year = year;
+    if (condition) post.condition = condition;
+    if (description !== undefined) post.description = description;
+    if (locationAddress !== undefined) post.locationAddress = locationAddress;
+
+    await post.save();
     res.json({ message: "Post updated successfully", post });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 const deleteMyPost = async (req, res) => {
   try {

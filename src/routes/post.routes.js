@@ -11,8 +11,9 @@ router.get("/my", protect, getMyPosts);
 
 router.route("/:id")
   .get(protect, getPostById)
-  .patch(protect, updateMyPost)
+  .patch(protect, upload.array("images", 5), updateMyPost)
   .delete(protect, deleteMyPost);
+
 
 router.patch("/:id/accept", protect, acceptOffer);
 
